@@ -1,7 +1,7 @@
 import { Check } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { DIFFICULTY_LABELS } from '@/lib/constants';
-import { cn } from '@/lib/utils';
+import { cn, sanitizeHtml } from '@/lib/utils';
 import type { CorrectOption, Difficulty, Question } from '@/types';
 
 const OPTION_KEYS: { key: CorrectOption; label: string }[] = [
@@ -22,15 +22,27 @@ export function QuestionPreviewCard({ question, index }: { question: Question; i
   return (
     <div className="card p-5">
       <div className="mb-3 flex items-start justify-between gap-3">
-        <h4 className="text-sm font-bold text-ink-900">
-          <span className="text-brand-500">Q{index}.</span> {question.question}
-        </h4>
+        <div className="min-w-0">
+          <span className="text-sm font-bold text-brand-500">Q{index}.</span>
+          <div
+            className="rte-content mt-1 text-sm font-medium text-ink-900"
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(question.question) }}
+          />
+        </div>
         {question.difficulty && (
           <Badge tone={DIFFICULTY_TONE[question.difficulty]}>
             {DIFFICULTY_LABELS[question.difficulty]}
           </Badge>
         )}
       </div>
+
+      {question.media_url && (
+        <img
+          src={question.media_url}
+          alt={`Question ${index} illustration`}
+          className="mb-3 max-h-56 rounded-xl border border-surface-border object-contain"
+        />
+      )}
 
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {OPTION_KEYS.map(({ key, label }) => {

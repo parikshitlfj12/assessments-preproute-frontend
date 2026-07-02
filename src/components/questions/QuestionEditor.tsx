@@ -1,32 +1,24 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
-  AlignLeft,
-  Bold,
   Check,
   ChevronLeft,
   ChevronRight,
+  Download,
   FileSpreadsheet,
   Image as ImageIcon,
-  Italic,
-  Link2,
-  List,
-  ListOrdered,
   Plus,
   RotateCcw,
-  Sigma,
-  Strikethrough,
-  Table2,
   Trash2,
-  Underline,
 } from 'lucide-react';
-import toast from 'react-hot-toast';
 import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Textarea';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
+import { RichTextEditor } from '@/components/ui/RichTextEditor';
 import { DIFFICULTY_OPTIONS } from '@/lib/constants';
+import { downloadQuestionCsvTemplate } from '@/lib/csv';
 import { questionSchema, type QuestionForm } from '@/lib/validation';
 import { cn } from '@/lib/utils';
 import type { CorrectOption } from '@/types';
@@ -36,20 +28,6 @@ const OPTION_FIELDS: { key: keyof QuestionForm; option: CorrectOption; label: st
   { key: 'option2', option: 'option2', label: 'B' },
   { key: 'option3', option: 'option3', label: 'C' },
   { key: 'option4', option: 'option4', label: 'D' },
-];
-
-const TOOLBAR: { key: string; Icon: typeof Bold }[] = [
-  { key: 'italic', Icon: Italic },
-  { key: 'bold', Icon: Bold },
-  { key: 'underline', Icon: Underline },
-  { key: 'strike', Icon: Strikethrough },
-  { key: 'link', Icon: Link2 },
-  { key: 'align', Icon: AlignLeft },
-  { key: 'list', Icon: List },
-  { key: 'ordered', Icon: ListOrdered },
-  { key: 'table', Icon: Table2 },
-  { key: 'image', Icon: ImageIcon },
-  { key: 'formula', Icon: Sigma },
 ];
 
 const EMPTY: QuestionForm = {
@@ -79,6 +57,7 @@ interface QuestionEditorProps {
   onNext?: () => void;
   canPrev?: boolean;
   canNext?: boolean;
+  onImportCsv?: (text: string) => void;
 }
 
 export function QuestionEditor({
@@ -94,6 +73,7 @@ export function QuestionEditor({
   onNext,
   canPrev = false,
   canNext = false,
+  onImportCsv,
 }: QuestionEditorProps) {
   const {
     register,
@@ -113,6 +93,15 @@ export function QuestionEditor({
   }, [initialValue, reset]);
 
   const correctOption = watch('correct_option');
+  const mediaUrl = watch('media_url');
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleCsvFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) onImportCsv?.(await file.text());
+    e.target.value = ''; // allow re-importing the same file
+  };
 
   const submit = (values: QuestionForm) => {
     onSubmit(values);
@@ -134,12 +123,27 @@ export function QuestionEditor({
           </span>
           <button
             type="button"
-            onClick={() => toast('CSV import is coming soon.')}
+            onClick={() => fileInputRef.current?.click()}
             className="inline-flex items-center gap-1.5 rounded-lg border border-surface-border px-3 py-1.5 text-xs font-semibold text-ink-500 transition hover:bg-surface-muted"
           >
             <FileSpreadsheet className="h-3.5 w-3.5" />
-            CSV
+            Import CSV
           </button>
+          <button
+            type="button"
+            onClick={downloadQuestionCsvTemplate}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-surface-border px-3 py-1.5 text-xs font-semibold text-ink-500 transition hover:bg-surface-muted"
+          >
+            <Download className="h-3.5 w-3.5" />
+            Template
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            onChange={handleCsvFile}
+            className="hidden"
+          />
         </div>
       </div>
 
@@ -152,27 +156,19 @@ export function QuestionEditor({
         Delete All Edits
       </button>
 
-      {/* Question text with a formatting toolbar shell */}
-      <div>
-        <div className="flex flex-wrap items-center gap-1 rounded-t-xl border border-b-0 border-surface-border bg-surface-muted/60 px-2 py-1.5">
-          {TOOLBAR.map(({ key, Icon }) => (
-            <span
-              key={key}
-              className="flex h-7 w-7 items-center justify-center rounded-md text-ink-400"
-              aria-hidden="true"
-            >
-              <Icon className="h-4 w-4" />
-            </span>
-          ))}
-        </div>
-        <Textarea
-          placeholder="Type here"
-          rows={4}
-          className="rounded-t-none"
-          error={errors.question?.message}
-          {...register('question')}
-        />
-      </div>
+      {/* Question text with a working rich-text formatting bar */}
+      <Controller
+        control={control}
+        name="question"
+        render={({ field }) => (
+          <RichTextEditor
+            value={field.value}
+            onChange={field.onChange}
+            placeholder="Type here"
+            error={errors.question?.message}
+          />
+        )}
+      />
 
       {/* Options */}
       <div>
@@ -235,6 +231,38 @@ export function QuestionEditor({
           </button>
         </div>
         <Textarea placeholder="Type here" rows={3} {...register('explanation')} />
+      </div>
+
+      {/* Question image (optional, stored as media_url) */}
+      <div>
+        <div className="mb-1.5 flex items-center justify-between">
+          <span className="flex items-center gap-1.5 text-sm font-semibold text-ink-700">
+            <ImageIcon className="h-4 w-4 text-ink-400" />
+            Question image (optional)
+          </span>
+          {mediaUrl && (
+            <button
+              type="button"
+              onClick={() => setValue('media_url', '', { shouldValidate: true })}
+              className="rounded-lg p-1.5 text-ink-400 transition hover:bg-red-50 hover:text-red-500"
+              aria-label="Remove image"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+        <Input
+          placeholder="Paste an image URL (https://…)"
+          error={errors.media_url?.message}
+          {...register('media_url')}
+        />
+        {mediaUrl && /^https?:\/\//i.test(mediaUrl) && (
+          <img
+            src={mediaUrl}
+            alt="Question attachment preview"
+            className="mt-3 max-h-48 rounded-xl border border-surface-border object-contain"
+          />
+        )}
       </div>
 
       {/* Question navigation */}

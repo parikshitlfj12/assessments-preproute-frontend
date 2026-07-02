@@ -12,7 +12,8 @@ import { Modal } from '@/components/ui/Modal';
 import { useTest, useUpdateTest } from '@/hooks/useTests';
 import { useBulkCreateQuestions, useTestQuestions } from '@/hooks/useQuestions';
 import { getApiErrorMessage } from '@/lib/axios';
-import { cn } from '@/lib/utils';
+import { parseQuestionsCsv } from '@/lib/csv';
+import { cn, stripHtml } from '@/lib/utils';
 import type { QuestionForm } from '@/lib/validation';
 import type { Question, QuestionPayload } from '@/types';
 
@@ -119,6 +120,35 @@ export function AddQuestionsPage() {
   const removeDraft = (localId: string) => {
     setDrafts((prev) => prev.filter((d) => d.localId !== localId));
     if (editingId === localId) setEditingId(null);
+  };
+
+  const handleImportCsv = (text: string) => {
+    if (!test) return;
+    const { questions: parsed, skipped, total } = parseQuestionsCsv(text);
+    if (total === 0) {
+      toast.error('No rows found. Use the template and keep the header row.');
+      return;
+    }
+    if (parsed.length === 0) {
+      toast.error('No valid questions in the CSV. Check the required columns.');
+      return;
+    }
+    const remaining = Math.max(0, test.total_questions - drafts.length);
+    if (remaining === 0) {
+      toast.error(`This test already has its ${test.total_questions} question(s).`);
+      return;
+    }
+    const toAdd = parsed.slice(0, remaining);
+    setDrafts((prev) => [...prev, ...toAdd.map((q) => ({ ...q, localId: newLocalId() }))]);
+
+    const notes: string[] = [];
+    if (skipped > 0) notes.push(`${skipped} invalid row(s) skipped`);
+    if (parsed.length > toAdd.length) {
+      notes.push(`${parsed.length - toAdd.length} over the limit ignored`);
+    }
+    toast.success(
+      `Imported ${toAdd.length} question(s)${notes.length ? ` — ${notes.join(', ')}` : ''}`,
+    );
   };
 
   const handleSaveAndContinue = async () => {
@@ -255,7 +285,7 @@ export function AddQuestionsPage() {
                       <button
                         className="flex-1 truncate text-left font-medium text-ink-700"
                         onClick={() => setEditingId(d.localId)}
-                        title={d.question}
+                        title={stripHtml(d.question) || `Question ${i + 1}`}
                       >
                         Question {i + 1}
                       </button>
@@ -296,6 +326,7 @@ export function AddQuestionsPage() {
                 onNext={goNext}
                 canPrev={canPrev}
                 canNext={canNext}
+                onImportCsv={handleImportCsv}
               />
             ) : (
               <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">

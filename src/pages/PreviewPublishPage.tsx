@@ -15,7 +15,7 @@ import { useTest, useUpdateTest } from '@/hooks/useTests';
 import { useTestQuestions } from '@/hooks/useQuestions';
 import { LIVE_UNTIL_PRESETS } from '@/lib/constants';
 import { getApiErrorMessage } from '@/lib/axios';
-import { cn } from '@/lib/utils';
+import { cn, stripHtml } from '@/lib/utils';
 import type { TestStatus, UpdateTestPayload } from '@/types';
 
 type PublishMode = 'now' | 'schedule';
@@ -170,7 +170,7 @@ export function PreviewPublishPage() {
                       <button
                         key={q.id}
                         onClick={() => navigate(`/tests/${id}/questions`)}
-                        title={q.question}
+                        title={stripHtml(q.question) || `Question ${i + 1}`}
                         className="flex w-full items-center gap-2 rounded-xl border border-surface-border px-3 py-2.5 text-left text-sm transition hover:border-brand-200 hover:bg-surface-muted"
                       >
                         <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />

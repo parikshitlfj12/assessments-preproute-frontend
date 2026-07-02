@@ -21,6 +21,7 @@ structure, robust API integration, and a UI that follows the provided Figma desi
 | Forms & validation | **React Hook Form + Zod** | Declarative validation with `zodResolver`. |
 | Styling | **Tailwind CSS** | Rapidly match the Figma design system with a consistent token set. |
 | Icons / toasts | **lucide-react**, **react-hot-toast** | Lightweight, consistent iconography and feedback. |
+| Sanitization | **DOMPurify** | Cleans rich-text HTML (from the editor, pastes, and the API) to prevent XSS. |
 
 ---
 
@@ -79,9 +80,9 @@ src/
 │   ├── common/     # PageHeader, TestInfoCard, TestDetailsFields, EditTestModal
 │   ├── layout/     # AppLayout, Sidebar, Topbar
 │   ├── questions/  # QuestionEditor, QuestionPreviewCard
-│   └── ui/         # Reusable primitives (Button, Input, Select, MultiSelect, Modal…)
+│   └── ui/         # Reusable primitives (Button, Input, Select, MultiSelect, Modal, RichTextEditor…)
 ├── hooks/          # React Query hooks + the shared useTestForm form hook
-├── lib/            # axios instance, query client, constants, validation, utils
+├── lib/            # axios instance, query client, constants, validation, csv parser, utils (incl. sanitizeHtml)
 ├── pages/          # One component per screen (Login, Dashboard, CreateEditTest…)
 ├── routes/         # ProtectedRoute, AuthWatcher (401 handling)
 ├── store/          # Zustand auth store
@@ -101,9 +102,13 @@ src/
    sub-topics (dependent multi-selects), marking scheme, and configuration, with a
    **live preview** of the test summary card. Supports **Save as Draft** and
    **Next: Add Questions**.
-4. **Add Questions** — Builder layout with a question-list rail, MCQ editor
-   (4 options, mark-correct, explanation, difficulty, topic / sub-topic), and
-   add / edit / delete on the staged list. The editor is capped at the test's
+4. **Add Questions** — Builder layout with a question-list rail and an MCQ editor:
+   4 options with mark-correct, a **rich-text formatting bar** for the question
+   (bold / italic / underline / strikethrough / lists / links, stored as HTML),
+   an optional **image** per question (via URL, stored as `media_url`), plus
+   explanation, difficulty and topic / sub-topic. Questions can be added
+   manually **or bulk-imported from CSV** (with a downloadable template), and
+   edited / deleted on the staged list. The editor is capped at the test's
    configured question count, and at least one question is required to continue.
 5. **Preview & Publish** — Full read-only overview of the test and every question
    (correct option highlighted), plus a publish panel with **Publish Now** /
@@ -131,6 +136,16 @@ src/
   entry points can never drift apart.
 - **Validation** is schema-driven with Zod so rules live in one place and are shared
   between the form and the submit payload.
+- **Rich text is stored as sanitized HTML.** The question editor is a lightweight,
+  dependency-free `contentEditable` (`RichTextEditor`) that emits HTML. Every entry
+  point — external values loaded from the API, clipboard pastes, and the final
+  render — is passed through a `sanitizeHtml` helper (DOMPurify with a strict tag /
+  attribute allowlist), so untrusted markup can never execute (XSS defense in depth).
+- **CSV bulk import is fully client-side.** `lib/csv.ts` parses the upload, maps
+  flexible header aliases, normalizes values, validates each row against the same Zod
+  schema, and reports skipped / over-limit rows — then feeds the drafts through the
+  existing `POST /questions/bulk` flow (no new backend needed). A matching template
+  is generated for download.
 
 ---
 
